@@ -33,7 +33,7 @@ sorted_eigenvalues = np.sort_complex(eigenvalues)
 
 # Theoretical prediction for the energy spectrum
 # Changed in 2026 for clarity
-x = 2*np.pi*np.array(range(1,L+1))/(L)
+x = 2*np.pi*np.arange(1,L+1)/(L)
 theory_energy_values = 2*np.cos(x)
 sorted_theory_values = np.sort(theory_energy_values)
 
