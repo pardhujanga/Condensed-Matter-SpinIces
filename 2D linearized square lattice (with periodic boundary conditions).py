@@ -5,7 +5,7 @@ import numpy as np
 from scipy import linalg
 from matplotlib import pyplot as plt
 
-L=40 # Size/periodicity of the lattice
+L = 40 # Size/periodicity of the lattice
 
 @jit(nopython=True) # Numba decorator to allow this function to be compiled "just in time" (jit)
 def kron(a,b): # Kronecker delta function
@@ -69,7 +69,7 @@ Z = Amplitude[L*Y + X]
 # Plotting the Amplitude
 fig, ax = plt.subplots()
 
-im_amp = ax.imshow(Z, cmap='plasma', vmin = 0, vmax = 0.05, origin="lower") # The max value has to be adjusted based on L (Born's rule)
+im_amp = ax.imshow(Z, cmap='plasma', vmin = 0, origin="lower")
 ax.set_title("absolute value of eigenfunction on the lattice")
 fig.colorbar(im_amp)
 plt.show()
@@ -91,4 +91,3 @@ ax.set_title("phase of eigenfunction on the lattice")
 fig.colorbar(im_phase)
 plt.show()
 
-# %%
