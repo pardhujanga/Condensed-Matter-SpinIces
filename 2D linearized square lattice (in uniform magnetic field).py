@@ -44,7 +44,7 @@ def energy(b):
 
 # Modified in 2026 for clarity
 n = 400 # Gradations in the magnetic field
-B = 2*np.pi*np.arange(n+1)/n # An array of magnetic field values
+B = 2*np.pi*np.arange(n+1)/n # An array of magnetic field values (this is technically the flux ratio, but is physically the same idea)
 
 # %%
 eigenvalues,eigenvectors = energy(B[200])
