@@ -60,7 +60,7 @@ plt.plot(sorted)
 plt.show()
 
 #NOTE:The energy spectrum varies just a bit from the no magnetic field case.
-# Could be due to the size of the lattice wahing out the effect of the monopole.
+# Could be due to the size of the lattice washing out the effect of the monopole.
 
 # %%
 plt.xlabel('n')

@@ -62,7 +62,7 @@ print(f"The index of the highest energy eigenfucntion is {np.argmax(eigenvalues)
 n = 0 # Choosing the eigenfunction we want to plot
 Amplitude = np.abs(eigenvectors[:,n]) # We are selecting all the numbers in the nth column. This is our nth eigenfunction in a flattened form.
 
-# Remapping the eigenfucntion to the lattice basis (reversing the linearisation)
+# Remapping the eigenfunction to the lattice basis (reversing the linearisation)
 X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
 Z = Amplitude[L*Y + X]
 
