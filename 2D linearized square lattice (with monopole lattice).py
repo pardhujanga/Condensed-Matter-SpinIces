@@ -1,25 +1,21 @@
 # %% Defining and solving the Hamiltonian for a 2D lattice with magnetic monopole lattice in plaquettes
 from numba import jit
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from matplotlib import pyplot as plt
 
-L=20
-index = np.array(range(L**2))
-length = np.array(range(L))
-points = np.array(range((L-1)**2))
-positions = []
+L=20 # Size of the lattice
 
-for i in np.array(range(L-1)):
-    for j in np.array(range(L-1)):
-        positions.append((i+0.5,j+0.5))
-
-monopoles = np.array(positions)
+# Modified in 2026 for clarity
+index = np.arange(L**2)
+length = np.arange(L)
+points = np.arange((L-1)**2)
+positions = [(i+0.5, j+0.5) for i in np.arange(L-1)  for j in np.arange(L-1)]
+monopoles = np.array(positions) # as numba likes numpy for jit
 
 
 @jit(nopython  = True)
-def kron(x,y):
+def kron(x,y): # Kronecker delta
     if x == y:
         return 1
     else:
@@ -30,7 +26,7 @@ def kron(x,y):
 #Answer --> Numba can't modify global variables in "nopython" mode. So, change
 #code to accomodate that.
 
-# This is much faster at making the Hamiltonian
+# This is much faster at making the Hamiltonian. Numba decorator to compile the code "just in time"
 @jit(nopython = True)
 def Hamiltonian():
     M = np.ones((L**2,L**2),dtype=np.complex128) #intializing the hamiltonian 
@@ -45,11 +41,18 @@ def Hamiltonian():
             for x in length:
                 for y in length:
                     if x!=0 and x!=L-1:
-                        M[i][L*y + x] *=  kron(i,L*y+(x-1))*np.exp(s*0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x-1-a)/(y-b)))) + kron(i,L*y+(x+1))*np.exp(s*0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x+1-a)/(y-b)))) + kron(i,L*((y-1))+x)*np.exp(s*0.5j*(np.arctan((y-1-b)/(x-a))-np.arctan((y-b)/(x-a)))) + kron(i,L*((y+1))+x)*np.exp(s*0.5j*(np.arctan((y+1-b)/(x-a))-np.arctan((y-b)/(x-a))))
+                        M[i][L*y + x] *=  kron(i,L*y+(x-1))   * np.exp(s*0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x-1-a)/(y-b)))) \
+                                        + kron(i,L*y+(x+1))   * np.exp(s*0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x+1-a)/(y-b)))) \
+                                        + kron(i,L*((y-1))+x) * np.exp(s*0.5j*(np.arctan((y-1-b)/(x-a)) - np.arctan((y-b)/(x-a)))) \
+                                        + kron(i,L*((y+1))+x) * np.exp(s*0.5j*(np.arctan((y+1-b)/(x-a)) - np.arctan((y-b)/(x-a))))
                     elif x==0:
-                        M[i][L*y + x] *=  kron(i,L*y+(x+1))*np.exp(s*0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x+1-a)/(y-b)))) + kron(i,L*((y-1))+x)*np.exp(s*0.5j*(np.arctan((y-1-b)/(x-a))-np.arctan((y-b)/(x-a)))) + kron(i,L*((y+1))+x)*np.exp(s*0.5j*(np.arctan((y+1-b)/(x-a))-np.arctan((y-b)/(x-a))))
+                        M[i][L*y + x] *=  kron(i,L*y+(x+1))   * np.exp(s*0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x+1-a)/(y-b)))) \
+                                        + kron(i,L*((y-1))+x) * np.exp(s*0.5j*(np.arctan((y-1-b)/(x-a)) - np.arctan((y-b)/(x-a)))) \
+                                        + kron(i,L*((y+1))+x) * np.exp(s*0.5j*(np.arctan((y+1-b)/(x-a)) - np.arctan((y-b)/(x-a))))
                     elif x==L-1:
-                        M[i][L*y + x] *=  kron(i,L*y+(x-1))*np.exp(s*0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x-1-a)/(y-b)))) + kron(i,L*((y-1))+x)*np.exp(s*0.5j*(np.arctan((y-1-b)/(x-a))-np.arctan((y-b)/(x-a)))) + kron(i,L*((y+1))+x)*np.exp(s*0.5j*(np.arctan((y+1-b)/(x-a))-np.arctan((y-b)/(x-a))))
+                        M[i][L*y + x] *=  kron(i,L*y+(x-1))   * np.exp(s*0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x-1-a)/(y-b)))) \
+                                        + kron(i,L*((y-1))+x) * np.exp(s*0.5j*(np.arctan((y-1-b)/(x-a)) - np.arctan((y-b)/(x-a)))) \
+                                        + kron(i,L*((y+1))+x) * np.exp(s*0.5j*(np.arctan((y+1-b)/(x-a)) - np.arctan((y-b)/(x-a))))
     return -M
 
 #NOTE Needed to split the hamiltoninan generation as the way the lattice to avoid interactions between
@@ -61,12 +64,12 @@ H = Hamiltonian()
 val, vec = linalg.eig(H)
 
 # %% Plotting the energy spectrum
-x = np.pi*np.array(range(L))/(L-1)
+x = 2*np.pi*np.array(range(1,L+1))/(L) #(there was no 2 originally, probably as mistake on my part))
 cos = np.cos(x)
 theory = []
 for i in cos:
     for j in cos:
-        theory.append(2*i+2*j)
+        theory.append(2*i + 2*j)
 
 sorted = np.sort(theory)
 
@@ -75,45 +78,70 @@ plt.plot(ordered_val,'k')
 plt.plot(sorted)
 plt.show()
 
+# %% Plotting the energy spectrum
+eigenvalues, eigenvectors = linalg.eig(H)
+sorted_eigenvalues = np.sort(eigenvalues)
+
+# %%
+# Creating the theoretical energy spectrum for the no-magnetic field case.
+x = 2*np.pi*np.arange(1,L+1)/(L)
+cos = np.cos(x)
+# Modified for clarity in 2026
+theory_energy_values = [2*i + 2*j for i in cos  for j in cos]
+sorted_theory_values = np.sort(theory_energy_values)
+
+# Changing the render resolution to be able to see things more clearly
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+
+# Plotting the two solutions against each other
+plt.xlabel('Energy level, n')
+plt.ylabel('Energy (in multiples of hopping parameter t)')
+plt.plot(sorted_theory_values,'k')
+plt.scatter(range(L**2), sorted_eigenvalues, s=1)
+plt.show() 
+
 # there is an energy cost to adding monopoles to the lattice
-# %%
-print(np.argmax(val))
 
-# %%
-n=0
-# %%  Defining a function to find the expansion of eigenfunctions in the lattice basis
-eigf = np.abs(vec[:,n])
+# %% Finding the lowest and highest energy eigenfunctions
+print(f"The index of the lowest energy eigenfucntion is {np.argmin(eigenvalues)}")
+print(f"The index of the highest energy eigenfucntion is {np.argmax(eigenvalues)}")
 
-# defining the lattice
+# %%  plotting the amplitude of the eigenfunctions
+n = 10
+Amplitude = np.abs(eigenvectors[:,n]) # We are selecting all the numbers in the nth column. This is our nth eigenfunction in a flattened form.
+
+# Remapping the eigenfunction to the lattice basis (reversing the linearisation)
 X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
-Z = eigf[L*Y + X]
+Z = Amplitude[L*Y + X] 
 
-# plot
 fig, ax = plt.subplots()
 
-im = ax.imshow(Z, cmap='plasma')
+im_amp = ax.imshow(Z, cmap='plasma', origin="lower")
 ax.set_title("absolute value of eigenfunction on the lattice")
-fig.colorbar(im)
+fig.colorbar(im_amp)
 plt.show()
 
-ipr = np.sum(np.square(np.square(eigf))) #inverse participation ratio - measures localization
+ipr = np.sum(np.square(np.square(Amplitude))) #inverse participation ratio - measures localization
 print("Inverse participation ratio is " + str(ipr))
 
 # %% plotting the phase of the eigenfunctions
-phase = np.angle(vec[:,n])
+Phase = np.angle(eigenvectors[:,n])
 
 X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
-Zp = phase[L*Y + X]
+Zp = Phase[L*Y + X]
 
-# plot
 fig, ax = plt.subplots()
 
-im = ax.imshow(Zp, cmap='plasma')
+im_phase = ax.imshow(Zp, cmap='twilight_shifted', vmin = -3.14, vmax = 3.14, origin="lower") # This cmap has a cyclic colour scheme
 ax.set_title("phase of eigenfunction on the lattice")
-fig.colorbar(im)
+fig.colorbar(im_phase)
 plt.show()
 
-# %% lattice
+
+# NOTE The code below this is under developed. I have kept it for archiving.
+# I will properly develop this later from scracth using the simpler models.
+# %% lattice intialisation
 # gamma to X
 g = np.meshgrid(np.linspace(0,L-1,L,dtype=np.float64), np.linspace(0,L-1,L,dtype=np.float64))
 r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1)
