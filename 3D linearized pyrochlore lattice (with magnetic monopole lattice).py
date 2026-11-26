@@ -19,11 +19,6 @@ def kron(x,y):
     else:
         return 0
 
-#NOTE: 
-# Problem --> Numba says H is read only, but it isn't. How do we fix this?
-#Answer --> Numba can't modify global variables in "nopython" mode. So, change
-#code to accomodate that.
-
 df = pd.read_csv('phases.csv')
 
 # This is much faster at making the Hamiltonian

@@ -1,19 +1,21 @@
 # %% Defining and solving the Hamiltonian for a 2D lattice with a magnetic monopole in it
 from numba import jit
 import numpy as np
-import scipy.sparse as sp
+import scipy.sparse as sp # Tried to use sparse matrices, but was not suitable (added comment in 2026)
 from scipy import linalg
 from matplotlib import pyplot as plt
+import time
 
-L=40
-index = np.array(range(L**2))
-length = np.array(range(L))
+L = 60 # Size of the lattice
+# Modified in 2026 for clarity
+index = np.arange(L**2)
+length = np.arange(L)
 
-a = -1/2 
-b = -1/2 #(a,b) is the monopole location
+# (a,b) is the monopole location. Choose (x-1/2, y-1/2) to place it at the centre of a unit cell.
+a,b = L/2-1/2, L/2-1/2 
 
 @jit(nopython = True)
-def kron(x,y):
+def kron(x,y): # Kronecker Delta function
     if x == y:
         return 1
     else:
@@ -29,11 +31,18 @@ def Hamiltonian():
         for x in length:
             for y in length:
                 if x!=0 and x!=L-1:
-                    M[i][L*y + x] *= - kron(i,L*y+(x-1))*np.exp(0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x-1-a)/(y-b)))) - kron(i,L*y+(x+1))*np.exp(0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x+1-a)/(y-b)))) - kron(i,L*((y-1))+x)*np.exp(0.5j*(np.arctan((y-1-b)/(x-a))-np.arctan((y-b)/(x-a)))) - kron(i,L*((y+1))+x)*np.exp(0.5j*(np.arctan((y+1-b)/(x-a))-np.arctan((y-b)/(x-a))))
+                    M[i][L*y + x] *= - kron(i,L*y+(x-1))   * np.exp(0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x-1-a)/(y-b)))) \
+                                     - kron(i,L*y+(x+1))   * np.exp(0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x+1-a)/(y-b)))) \
+                                     - kron(i,L*((y-1))+x) * np.exp(0.5j*(np.arctan((y-1-b)/(x-a)) - np.arctan((y-b)/(x-a)))) \
+                                     - kron(i,L*((y+1))+x) * np.exp(0.5j*(np.arctan((y+1-b)/(x-a)) - np.arctan((y-b)/(x-a))))
                 elif x==0:
-                    M[i][L*y + x] *= - kron(i,L*y+(x+1))*np.exp(0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x+1-a)/(y-b)))) - kron(i,L*((y-1))+x)*np.exp(0.5j*(np.arctan((y-1-b)/(x-a))-np.arctan((y-b)/(x-a)))) - kron(i,L*((y+1))+x)*np.exp(0.5j*(np.arctan((y+1-b)/(x-a))-np.arctan((y-b)/(x-a))))
+                    M[i][L*y + x] *= - kron(i,L*y+(x+1))   * np.exp(0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x+1-a)/(y-b)))) \
+                                     - kron(i,L*((y-1))+x) * np.exp(0.5j*(np.arctan((y-1-b)/(x-a)) - np.arctan((y-b)/(x-a)))) \
+                                     - kron(i,L*((y+1))+x) * np.exp(0.5j*(np.arctan((y+1-b)/(x-a)) - np.arctan((y-b)/(x-a))))
                 elif x==L-1:
-                    M[i][L*y + x] *= - kron(i,L*y+(x-1))*np.exp(0.5j*(np.arctan((x-a)/(y-b))-np.arctan((x-1-a)/(y-b)))) - kron(i,L*((y-1))+x)*np.exp(0.5j*(np.arctan((y-1-b)/(x-a))-np.arctan((y-b)/(x-a)))) - kron(i,L*((y+1))+x)*np.exp(0.5j*(np.arctan((y+1-b)/(x-a))-np.arctan((y-b)/(x-a))))
+                    M[i][L*y + x] *= - kron(i,L*y+(x-1))   * np.exp(0.5j*(np.arctan((x-a)/(y-b))   - np.arctan((x-1-a)/(y-b)))) \
+                                     - kron(i,L*((y-1))+x) * np.exp(0.5j*(np.arctan((y-1-b)/(x-a)) - np.arctan((y-b)/(x-a)))) \
+                                     - kron(i,L*((y+1))+x) * np.exp(0.5j*(np.arctan((y+1-b)/(x-a)) - np.arctan((y-b)/(x-a))))
     return M
 
 #NOTE Needed to split the hamiltoninan generation as the way the lattice to avoid interactions between
@@ -42,65 +51,163 @@ H = Hamiltonian()
 
 #NOTE: this is the bottle neck now. Making the Hamiltonian is very quick
 #solving for spectrum and eigenfunctions
-val, vec = linalg.eig(H)
+eigenvalues, eigenvectors = linalg.eig(H)
+sorted_eigenvalues = np.sort(eigenvalues)
 
 # %% Plotting the energy spectrum
-x = 2*np.pi*np.array(range(1,L+1))/(L)
+# Creating the theoretical energy spectrum for the no-magnetic field case.
+x = 2*np.pi*np.arange(1,L+1)/(L)
 cos = np.cos(x)
-theory = []
-for i in cos:
-    for j in cos:
-        theory.append(2*i+2*j)
+# Modified for clarity in 2026
+theory_energy_values = [2*i + 2*j for i in cos  for j in cos]
+sorted_theory_values = np.sort(theory_energy_values)
 
-sorted = np.sort(theory)
+# Changing the render resolution to be able to see things more clearly
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
 
-ordered_val = np.sort(val)
-plt.plot(ordered_val,'k')
-plt.plot(sorted)
-plt.show()
+# Plotting the two solutions against each other
+plt.xlabel('Energy level, n')
+plt.ylabel('Energy (in multiples of hopping parameter t)')
+plt.plot(sorted_theory_values,'k')
+plt.scatter(range(L**2), sorted_eigenvalues, s=1)
+plt.show() 
 
 #NOTE:The energy spectrum varies just a bit from the no magnetic field case.
-# Could be due to the size of the lattice wahing out the effect of the monopole.
+# Could be due to the size of the lattice washing out the effect of the monopole.
 
-# %%
-plt.xlabel('n')
-plt.ylabel('Energy (in multiples of hopping parameter t)')
-plt.plot(sorted,'k')
-plt.scatter(range(L**2),ordered_val,s=1)
-plt.show() 
  
-# %%
-print(np.argmin(val))
+# %% Finding the lowest and highest energy eigenfunctions
+print(f"The index of the lowest energy eigenfucntion is {np.argmin(eigenvalues)}")
+print(f"The index of the highest energy eigenfucntion is {np.argmax(eigenvalues)}")
 
-# %%
-n=10
-# %%  Defining a function to find the expansion of eigenfunctions in the lattice basis
-eigf = np.abs(vec[:,n])
+# %% 
+n = 59 # picking the eigenfucntion to display (between 0 and L**2-1 inclusive)
 
-# defining the lattice
+# %% plotting the amplitude of the eigenfunctions
+Amplitude = np.abs(eigenvectors[:,n]) # We are selecting all the numbers in the nth column. This is our nth eigenfunction in a flattened form.
+
+# Remapping the eigenfunction to the lattice basis (reversing the linearisation)
 X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
-Z = eigf[L*Y + X]
+Z = Amplitude[L*Y + X] 
 
-# plot
 fig, ax = plt.subplots()
 
-im = ax.imshow(Z, cmap='plasma')
+im_amp = ax.imshow(Z, cmap='plasma', origin="lower")
 ax.set_title("absolute value of eigenfunction on the lattice")
-fig.colorbar(im)
+fig.colorbar(im_amp)
+plt.show()
+
+# %% plotting the phase of the eigenfunctions
+Phase = np.angle(eigenvectors[:,n])
+
+X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
+Zp = Phase[L*Y + X]
+
+fig, ax = plt.subplots()
+
+im_phase = ax.imshow(Zp, cmap='twilight_shifted', vmin = -3.14, vmax = 3.14, origin="lower") # This cmap has a cyclic colour scheme
+ax.set_title("phase of eigenfunction on the lattice")
+fig.colorbar(im_phase)
 plt.show()
 
 
-# %% plotting the phase of the eigenfunctions
-phase = np.angle(vec[:,n])
+# %% BANDSTRUCTURE!!! (added in 2026)
 
-X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
-Zp = phase[L*Y + X]
+# making a correspondence between the sorted energy eigenvalues and the eigenfunctions in the order they are produced in
+energy_dict = []
+for i in sorted_eigenvalues:
+    energy_dict.append(list(eigenvalues).index(i))
+energy_dict = np.array(energy_dict)
+
+# These are just for reference, they are not used in the code
+point_X = np.array([1,0],np.float64) # Point on the BZ boundary directly along the k_x direction in the reciprocal lattice 
+point_Gamma = np.array([0,0],np.float64) # Origin in the reciprocal lattice
+point_M = np.array([1,1],np.float64) # Corner of the square BZ
+
+g = np.meshgrid(np.linspace(0,L-1,L,dtype=np.float64), np.linspace(0,L-1,L,dtype=np.float64))
+r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1) #this is the lattice
+
+g_k = np.meshgrid(np.linspace(-1,1,L,endpoint=False,dtype = np.float64), np.linspace(-1,1,L,endpoint=False,dtype = np.float64))
+k_space = np.pi*np.append(g_k[0].reshape(-1,1),g_k[1].reshape(-1,1),axis=1) #this is the reciprocal lattice, kinda
+
+# Precalculating the Fourier exponential factors as they are the same for all wavefunctions
+# This gives a 10x performance increase
+@jit(nopython=True)
+def factors():
+    factors = np.empty(shape=(L**4,), dtype=np.complex128)
+    for k in index:
+        for p in index:
+            factors[k*(L**2) + p] = np.exp(-1j * np.dot(k_space[k], r[p]))
+
+    return factors
+
+Factors = factors()
+
+@jit(nopython=True)
+def Fourier_Transform(m):
+    eigfunc = eigenvectors[:,m] # Loading the chosen wavefunction
+    i = 0
+    phi = np.empty(shape=(L**2,), dtype=np.int64) # initialising the fourier transformed wavefunction
+    for k in index:
+        phi_k = 0
+        for p in index:
+            phi_k += Factors[k*(L**2) + p] * eigfunc[p]  # I am saving the absolute value squared of each term of the fourier transform. This is because we need how big each "term" is.
+        phi[i] = np.square(np.abs(phi_k))
+        i += 1
+
+    return np.reshape(phi, (L,L))
+
+# Just a primitive test to see how quickly each iteration of the fourier transform takes
+time_start = time.time()
+FT_amp = Fourier_Transform(energy_dict[0])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds")
+
+time_start = time.time()
+FT_amp = Fourier_Transform(energy_dict[1])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds for the second time")
+
+time_start = time.time()
+FT_amp = Fourier_Transform(energy_dict[2])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds for the third time")
+
+Origin = int(L/2) # The location of the origin of the reciprocal lattice is at this index for both x and y
+
+@jit(nopython = True)
+def bandstructure():
+    band = np.empty(shape = (3*L**2, int(L/2)), dtype=np.int64) # initialising the bandstructure
+    for n in index:
+        Fourier = Fourier_Transform(energy_dict[n]) # Written to limit the number of calls to Fourier_Transform
+        band[3*n] = Fourier[Origin: ,  Origin] # Gamma to X 
+        band[3*n +1] = Fourier[L-1,  Origin:] # X to M
+        band[3*n + 2] = np.array([Fourier[x,x] for x in np.arange(L-1,Origin-1,-1)]) # M to Gamma
+    return band
+
+bds = bandstructure()
+
+# %% plotting
+s = int(3*L/2) # just a convenient constant
+X, Y = np.meshgrid(np.linspace(0, s-1, s,dtype=int), sorted_eigenvalues)
+# Y has to be the sorted energy values otherwise, it plots everything "linearly". 
+# The energy values for each wavefunction are not uniform and that is important.
+Bands = np.reshape(bds,(L**2, s)) # needs changing to fit the size of bds properly
+
 
 # plot
 fig, ax = plt.subplots()
+plt.rcParams['figure.dpi'] = 600 # change these based on the lattice resolution
+plt.rcParams['savefig.dpi'] = 600
 
-im = ax.imshow(Zp, cmap='plasma')
-ax.set_title("phase of eigenfunction on the lattice")
+plt.ylabel("Energy")
+plt.xlabel("k")
+plt.vlines([Origin-1, L-1], sorted_eigenvalues[0], sorted_eigenvalues[L**2-1],"k")
+plt.xticks([0,Origin-1,L-1,s-1], ['\N{GREEK CAPITAL LETTER GAMMA}','X','M','\N{GREEK CAPITAL LETTER GAMMA}'])
+im = ax.pcolormesh(X, Y, Bands, vmax = 10, cmap='Greys')
+# Limiting the vmax allows us to see the details better. Can log Bands instead to be a bit more rigorous
+ax.set_title("Band structure")
 fig.colorbar(im)
 plt.show()
 

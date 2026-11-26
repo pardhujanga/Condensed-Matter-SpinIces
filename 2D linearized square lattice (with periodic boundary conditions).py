@@ -1,85 +1,195 @@
-# %% Defining and solving the Hamiltonian
+# %% This defines a Jupyter-like code cell, while still being in a .py file
+
 from numba import jit
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from matplotlib import pyplot as plt
+import time
 
-L=40 #periodicity of the lattice
+L = 40 # Size/periodicity of the lattice
 
-@jit(nopython=True)
-def kron(a,b): #kronecker delta function
+@jit(nopython=True) # Numba decorator to allow this function to be compiled "just in time" (jit)
+def kron(a,b): # Kronecker delta function
     if a == b:
         return 1
     else:
         return 0
 
+# Rewritten in 2026 for clarity
+index = np.arange(L**2)
+length = np.arange(L)
 
-index = np.array(range(L**2))
-length = np.array(range(L))
-
+# %% Creating the Hamiltonian for the model
 @jit(nopython=True)
 def Hamiltonian():
-    H = np.ones((L**2,L**2),dtype=np.complex128) #intializing the Hamiltonian
-    for i in index: #NOTE the modulo is there to enforce periodic boundary conditions
+    H = np.ones((L**2,L**2),dtype=np.complex128) # Intializing the Hamiltonian
+    for i in index: #NOTE The modulo is present in the kronecker function to enforce periodic boundary conditions
         for x in length:
             for y in length:
                 H[i][L*y + x] *= - kron(i,L*y+(x-1)%L) - kron(i,L*y+(x+1)%L) - kron(i,L*((y-1)%L)+x) - kron(i,L*((y+1)%L)+x)
     return H
 
+# %% Solving for spectrum and eigenfunctions
 h = Hamiltonian()
-#solving for spectrum and eigenfunctions
-val, vec = linalg.eig(h)
-ordered_val = np.sort(val)
+eigenvalues, eigenvectors = linalg.eig(h)
+sorted_eigenvalues = np.sort(eigenvalues)
 
-#generating basis to be able to visualize the eigenfunctions
-#basis = np.zeros((L**2,L**2))
-#for i in index:
-    #basis[i][i]=1
 
-# %%  Defining a function to find the expansion of eigenfunctions in the lattice basis
-n = 550
-eigf = np.abs(vec[:,n])
-#phase = np.angle(vec[:,n])
+# %% Creating the theoretical energy spectrum
+x = 2*np.pi*np.arange(1,L+1)/(L)
+cos = np.cos(x)
+# Modified for clarity in 2026
+theory_energy_values = [2*i + 2*j for i in cos  for j in cos]
+sorted_theory_values = np.sort(theory_energy_values)
 
-# %%
-# make data
+# Changing the render resolution to be able to see things more clearly
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+
+# Plotting the two solutions against each other
+plt.xlabel('Energy level, n')
+plt.ylabel('Energy (in multiples of hopping parameter t)')
+plt.plot(sorted_theory_values,'k')
+plt.scatter(range(L**2), sorted_eigenvalues,s=1, c="Red")
+plt.show()
+
+# %% Finding the lowest and highest energy eigenfunctions
+print(f"The index of the lowest energy eigenfucntion is {np.argmin(eigenvalues)}")
+print(f"The index of the highest energy eigenfucntion is {np.argmax(eigenvalues)}")
+
+
+# %%  Plotting the eigenfunctions in the lattice basis. This is one way to study the system.
+
+n = 0 # Choosing the eigenfunction we want to plot
+Amplitude = np.abs(eigenvectors[:,n]) # We are selecting all the numbers in the nth column. This is our nth eigenfunction in a flattened form.
+
+# Remapping the eigenfunction to the lattice basis (reversing the linearisation)
 X, Y = np.meshgrid(np.linspace(0,L-1,L,dtype=int), np.linspace(0,L-1,L,dtype=int))
-Z = eigf[L*Y + X]
-#Zp = phase[L*Y + X]
+Z = Amplitude[L*Y + X]
+
+# Plotting the Amplitude
+fig, ax = plt.subplots()
+
+im_amp = ax.imshow(Z, cmap='plasma', vmin = 0, origin="lower")
+ax.set_title("absolute value of eigenfunction on the lattice")
+fig.colorbar(im_amp)
+plt.show()
+
+# %% Plotting the Phase
+#NOTE The "phase" of the eigenfunction at each lattice point is just as important as the amplitude.
+# In the 2D no magnetic field system, the highest and lowest energy eigenfucntions
+# both have very similar amplitude distributions. But looking at their phases, we see that
+# the lowest energy state has uniform phase, whereas the highest energy one has fully alternating phases.
+# So, looking at phase map is just as valuable as looking at the amplitude.
+
+Phase = np.angle(eigenvectors[:,n])
+Zp = Phase[L*Y + X]
+
+fig, ax = plt.subplots()
+
+im_phase = ax.imshow(Zp, cmap='twilight_shifted', vmin = -3.14, vmax = 3.14, origin="lower") # This cmap has a cyclic colour scheme
+ax.set_title("phase of eigenfunction on the lattice")
+fig.colorbar(im_phase)
+plt.show()
+
+
+# %% BANDSTRUCTURE!!! (added in 2026)
+
+# making a correspondence between the sorted energy eigenvalues and the eigenfunctions in the order they are produced in
+energy_dict = []
+for i in sorted_eigenvalues:
+    energy_dict.append(list(eigenvalues).index(i))
+energy_dict = np.array(energy_dict)
+
+# These are just for reference, they are not used in the code
+point_X = np.array([1,0],np.float64) # Point on the BZ boundary directly along the k_x direction in the reciprocal lattice 
+point_Gamma = np.array([0,0],np.float64) # Origin in the reciprocal lattice
+point_M = np.array([1,1],np.float64) # Corner of the square BZ
+
+g = np.meshgrid(np.linspace(0,L-1,L,dtype=np.float64), np.linspace(0,L-1,L,dtype=np.float64))
+r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1) #this is the lattice
+
+g_k = np.meshgrid(np.linspace(-1,1,L,endpoint=False,dtype = np.float64), np.linspace(-1,1,L,endpoint=False,dtype = np.float64))
+k_space = np.pi*np.append(g_k[0].reshape(-1,1),g_k[1].reshape(-1,1),axis=1) #this is the reciprocal lattice, kinda
+
+# Precalculating the Fourier exponential factors as they are the same for all wavefunctions
+# This gives a 10x performance increase
+@jit(nopython=True)
+def factors():
+    factors = np.empty(shape=(L**4,), dtype=np.complex128)
+    for k in index:
+        for p in index:
+            factors[k*(L**2) + p] = np.exp(-1j * np.dot(k_space[k], r[p]))
+
+    return factors
+
+Factors = factors()
+
+@jit(nopython=True)
+def Fourier_Transform(m):
+    eigfunc = eigenvectors[:,m] # Loading the chosen wavefunction
+    i = 0 
+    phi = np.empty(shape=(L**2,), dtype=np.int64) # initialising the fourier transformed wavefunction
+    for k in index:
+        phi_k = 0
+        for p in index:
+            phi_k += Factors[k*(L**2) + p] * eigfunc[p]
+        phi[i] = np.square(np.abs(phi_k)) # I am saving the absolute value squared of each term of the fourier transform. This is because we need how big each "term" is.
+        i += 1
+
+    return np.reshape(phi, (L,L))
+
+# Just a primitive test to see how quickly each iteration of the fourier transform takes
+time_start = time.time()
+FT_amp = Fourier_Transform(energy_dict[0])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds")
+
+time_start = time.time()
+FT_amp = Fourier_Transform(energy_dict[1])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds for the second time")
+
+time_start = time.time()
+FT_amp = Fourier_Transform(energy_dict[2])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds for the third time")
+
+Origin = int(L/2) # The location of the origin of the reciprocal lattice is at this index for both x and y
+
+@jit(nopython = True)
+def bandstructure():
+    band = np.empty(shape = (3*L**2, int(L/2)), dtype=np.int64) # initialising the bandstructure
+    for n in index:
+        Fourier = Fourier_Transform(energy_dict[n]) # Written to limit the number of calls to Fourier_Transform
+        band[3*n] = Fourier[Origin: ,  Origin] # Gamma to X 
+        band[3*n +1] = Fourier[L-1,  Origin:] # X to M
+        band[3*n + 2] = np.array([Fourier[x,x] for x in np.arange(L-1,Origin-1,-1)]) # M to Gamma
+    return band
+
+bds = bandstructure()
+
+# %% plotting
+a = int(3*L/2) # just a convenient constant
+X, Y = np.meshgrid(np.linspace(0, a-1, a,dtype=int), sorted_eigenvalues)
+# Y has to be the sorted energy values otherwise, it plots everything "linearly". 
+# The energy values for each wavefunction are not uniform and that is important.
+Bands = np.reshape(bds,(L**2, a)) # needs changing to "create" the bands properly
+
 
 # plot
 fig, ax = plt.subplots()
+plt.rcParams['figure.dpi'] = 300 # change these based on the lattice resolution
+plt.rcParams['savefig.dpi'] = 300
 
-im = ax.imshow(Z, cmap='plasma') #replace Z with Zp to see phase of eigenfunction across the lattice.
-ax.set_title("absolute value of eigenfunction on the lattice")
+plt.ylabel("Energy")
+plt.xlabel("k")
+plt.vlines([Origin-1, L-1],-4,4,"k")
+plt.xticks([0,Origin-1,L-1,a-1], ['\N{GREEK CAPITAL LETTER GAMMA}','X','M','\N{GREEK CAPITAL LETTER GAMMA}'])
+im = ax.pcolormesh(X, Y, Bands, vmax = 5, cmap='Greys')
+# Limiting the vmax allows us to see the details better. Can log Bands instead to be a bit more rigorous
+ax.set_title("Band structure")
 fig.colorbar(im)
-plt.show()
-
-
-#NOTE The "phase" of the eigenfunction at each lattice point is just as important as the amplitude.
-#Like, in the 2D no magnetic field system, the highest and lowest energy eigenfucntions
-#both have very similar amplitude distributions. But looking at their phases, we see that
-#the lowest energy state has uniform phase, whereas the highest energy one has fully alternating phases.
-
-# %% code to create 2cos(k_x) + 2cos(k_y) to compare the energy spectrum with theory
-x = 2*np.pi*np.array(range(1,L+1))/(L)
-cos = np.cos(x)
-theory = []
-for i in cos:
-    for j in cos:
-        theory.append(2*i+2*j)
-
-sorted = np.sort(theory)
-
-plt.plot(ordered_val)
-plt.plot(sorted)
-plt.show()
-# %%
-plt.xlabel('n')
-plt.ylabel('Energy (in multiples of hopping parameter t)')
-plt.plot(sorted,'k')
-plt.scatter(range(L**2),ordered_val,s=1)
 plt.show()
 
 # %%

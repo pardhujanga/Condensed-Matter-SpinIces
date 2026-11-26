@@ -1,12 +1,11 @@
 # %% Defining and solving the Hamiltonian for a closed n-gon lattice in a uniform magnetic field perpendicular to it
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from matplotlib import pyplot as plt
 
-L=4
+n = 4 # For n = 4, we have equivalence with L = 2 for the 2D square lattice with unifrom magnetic field.
 
-def kron(x,y):
+def kron(x,y): # Kronecker Delta function
     if x == y:
         return 1
     else:
@@ -21,21 +20,21 @@ def kron(x,y):
 # But I removed the unnecessary interaction and things work exactly as they should. Also, this interaction was
 #covered up in the no mag field case due to Periodic boundary conditions.
 
-length = range(L)
+length = range(n)
 
-H = np.zeros((L,L),dtype=np.complex128) #intializing the hamiltonian 
+H = np.zeros((n,n),dtype=np.complex128) #intializing the hamiltonian 
 
 def energy(b):
     for i in length:
         for x in length:
-            H[i][x] = - kron(i,(x-1)%L)*np.exp(-1j*b/L) - kron(i,(x+1)%L)*np.exp(1j*b/L) 
+            H[i][x] = - kron(i,(x-1)%n)*np.exp(-1j*b/n) - kron(i,(x+1)%n)*np.exp(1j*b/n) 
            
     #solving for spectrum and eigenfunctions
-    val, vec = linalg.eig(H)
-    return val
+    eigenvalues, eigenvectors = linalg.eig(H)
+    return eigenvalues
 
-n = 400
-B = 2*np.pi*np.array(range(n+1))/n
+g = 400 # gradations
+B = 2*np.pi*np.array(range(g+1))/g # magnetic field values
 
 # %% Plotting the data (slightly faster than graphing the bands)
 points = []
