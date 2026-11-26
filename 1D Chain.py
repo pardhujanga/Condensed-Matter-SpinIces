@@ -53,3 +53,60 @@ plt.show()
 # As expected it is a sine curve. Computed the values of cos(k)
 # which are the exact eigenvalues, with k being quantized. Match exactly.
 # %%
+# %% BANDS!!!
+sorted_eigenvalues = np.sort(eigenvalues)
+energy_dict = []
+for i in sorted_eigenvalues:
+    energy_dict.append(list(eigenvalues).index(i))
+energy_dict = np.array(energy_dict)
+
+length = np.arange(L)
+point_X = np.array([1],np.float64) # Point on the BZ boundary directly along the k_x direction in the reciprocal lattice 
+point_Gamma = np.array([0],np.float64) # Origin in the reciprocal lattice
+#eta = 2*np.pi*np.arange(L)/L # Not sure why I chose 0 to 2pi. I did for the fourier transform, but it can be done either way
+eta = np.pi*np.arange(-L,L,2)/L # excludes the upper end, includes lower end
+
+index = np.arange(L) # for the 1D case
+
+def Fourier_Transform(m):
+    eigfunc = eigenvectors[:,m]
+    phi = [] # initialising the fourier transformed wavefunction
+    for e in length: # this loops over the "k"s to get all terms of the FTed eigenfunction
+        phi_e = 0
+        for p in index:
+            phi_e += np.exp(-1j*eta[e]*np.dot(point_X,np.array(p)))*eigfunc[p] # p here is the value of "x". This is more complex in 2D of course. Should be the lattice point corresponding to that index
+        phi.append(np.square(np.abs(phi_e))) # So I am saving the absolute value squared of each term of the fourier transform. This makes sense as of course we need how big each "term" is i suppose.
+        # The np.square or np.abs seems to return an array which requires me to reshape things later
+    return np.array(phi)
+
+# works for this, but is more complex in 2D
+def bands():
+    band = []
+    for n in index:
+        band.append(Fourier_Transform(energy_dict[n])) # we are appending the entire fted wavefunction to bands here 
+        # NOTE That is gonna be bad for the case where we only need parts of this for each direction. We'll figure it out when we get to it.
+        # Definitely should call each FT only once and use that judiciously to extract the info we want all at once
+    return np.array(band)
+
+bds = bands()
+
+# %%
+print(np.shape(bds))
+
+# %% plotting
+X, Y = np.meshgrid(np.linspace(-np.pi, np.pi, int(L), dtype=float), sorted_eigenvalues) # Y has to be the sorted energy values otherwise, it plots everything "linearly". The energy values for each wavefunction are not uniform and that is important.
+Z = np.reshape(bds,(100,100))
+#Bands = Z[ : , : int(L/2)]
+Bands = Z
+
+# plot
+fig, ax = plt.subplots()
+import matplotlib.colors as colour
+
+plt.ylabel("Energy")
+plt.xlabel("k")
+im = ax.pcolormesh(X, Y, Bands, cmap='plasma')
+ax.set_title("Band structure")
+fig.colorbar(im)
+plt.show()
+# %%

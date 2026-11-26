@@ -4,7 +4,7 @@ import numpy as np
 from scipy import linalg
 from matplotlib import pyplot as plt
 
-L=20 # Size of the lattice
+L = 40 # Size of the lattice
 
 # Modified in 2026 for clarity
 index = np.arange(L**2)
@@ -139,70 +139,105 @@ fig.colorbar(im_phase)
 plt.show()
 
 
-# NOTE The code below this is under developed. I have kept it for archiving.
-# I will properly develop this later from scracth using the simpler models.
-# %% lattice intialisation
-# gamma to X
-g = np.meshgrid(np.linspace(0,L-1,L,dtype=np.float64), np.linspace(0,L-1,L,dtype=np.float64))
-r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1)
-
-
-# %% ORDERED BANDS!!!
-ordered_val = np.sort_complex(val)
+# %%
+eigenvalues = val
+eigenvectors = vec
+sorted_eigenvalues = np.sort(eigenvalues)
 energy_dict = []
-for i in ordered_val:
-    energy_dict.append(list(val).index(i))
+for i in sorted_eigenvalues:
+    energy_dict.append(list(eigenvalues).index(i))
 energy_dict = np.array(energy_dict)
 
-l = L
-xlength = np.array(range(L))
-point_X = np.array([1,0],np.float64)
-point_Y = np.array([0,1],np.float64)
-eta = 2*np.pi*np.array(range(0,l,1))/(l)
+point_X = np.array([1,0],np.float64) # Point on the BZ boundary directly along the k_x direction in the reciprocal lattice 
+point_Gamma = np.array([0,0],np.float64) # Origin in the reciprocal lattice
+point_M = np.array([1,1],np.float64) # Corner of the square BZ
+
+g = np.meshgrid(np.linspace(0,L-1,L,dtype=np.float64), np.linspace(0,L-1,L,dtype=np.float64))
+r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1) #this is the lattice
+
+g_k = np.meshgrid(np.linspace(-1,1,L,endpoint=False,dtype = np.float64), np.linspace(-1,1,L,endpoint=False,dtype = np.float64))
+k_space = np.pi*np.append(g_k[0].reshape(-1,1),g_k[1].reshape(-1,1),axis=1) #this is the reciprocal lattice, kinda
+
+# %%
+import time
+
+@jit(nopython=True)
+def factors():
+    factors = np.empty(shape=(L**4,), dtype=np.complex128)
+    for k in index:
+        for p in index:
+            factors[k*(L**2) + p] = np.exp(-1j * np.dot(k_space[k], r[p]))
+
+    return factors
+
+Factors = factors()
 
 @jit(nopython=True)
 def ft(m):
-    eigfunc = vec[:,m]
-    phi = []
-    for e in xlength:
-        phi_e = 0
+    eigfunc = eigenvectors[:,m]
+    i = 0
+    phi = np.empty(shape=(L**2,), dtype=np.int64)
+    for k in index:
+        phi_k = 0
         for p in index:
-            phi_e += np.exp(-1j*eta[e]*np.dot(point_X,r[p]))*eigfunc[p]
-        phi.append(np.square(np.abs(phi_e)))
+            phi_k += Factors[k*(L**2) + p] * eigfunc[p] # would having the exponential part be preccmputed be faster? that is the same for every single ft
+        phi[i] = np.square(np.abs(phi_k))
+        i += 1
 
-    return phi
+    return np.reshape(phi, (L,L))
+
+time_start = time.time()
+FT_amp = ft(energy_dict[0])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds")
+
+time_start = time.time()
+FT_amp = ft(energy_dict[1])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds for the second time")
+
+time_start = time.time()
+FT_amp = ft(energy_dict[2])
+time_end = time.time()
+print(f"Took {time_end - time_start} seconds for the third time")
+
+
+# %%
+Origin = int(L/2)
 
 @jit(nopython = True)
 def bands():
-    band = []
-    n=0
-    while n < L**2: 
-        p=0          
-        k = np.array(ft(energy_dict[n]))
-        for l in index:
-            if l!=n and np.abs(ordered_val[n+p]-ordered_val[l])<5*2*10**-3:
-                k = k+np.array(ft(energy_dict[l]))
-                p+=1
-        n += 1+p
-        band.append(list(k))
+    band = np.empty(shape = (3*L**2, int(L/2)), dtype=np.int64)
+    for n in index:
+        Fourier = ft(energy_dict[n])
+        band[3*n] = Fourier[Origin: ,  Origin] #This is the section we want for Gamma to X 
+        band[3*n +1] = Fourier[L-1,  Origin:] #This is the section we want for X to M
+        band[3*n + 2] = np.array([Fourier[x,x] for x in np.arange(L-1,Origin-1,-1)]) #This is the section we want for M to Gamma
     return band
 
 bds = bands()
 
 # %% plotting
-X, Y = np.meshgrid(np.linspace(0,l-1,l,dtype=int), np.linspace(0,L**2-1,L**2,dtype=int))
-#Z = bds[Y][X]
+a = int(3*L/2)
+X, Y = np.meshgrid(np.linspace(0, a-1, a,dtype=int), sorted_eigenvalues)
+Z = np.reshape(bds,(L**2, a)) # needs changing to fit the size of bds properly
+Bands = Z
+
+plt.rcParams['figure.dpi'] = 600
+plt.rcParams['savefig.dpi'] = 600
 
 # plot
 fig, ax = plt.subplots()
-#import matplotlib.colors as colour
 
-im = ax.pcolormesh(np.log(bds+np.ones(np.shape(bds))), cmap='plasma')
+
+plt.ylabel("Energy")
+plt.xlabel("k")
+plt.vlines([Origin-1, L-1], sorted_eigenvalues[0], sorted_eigenvalues[L**2-1],"k")
+plt.xticks([0,Origin-1,L-1,a-1], ['\N{GREEK CAPITAL LETTER GAMMA}','X','M','\N{GREEK CAPITAL LETTER GAMMA}'])
+#im = ax.pcolormesh(X, Y, np.log(Bands + np.ones(np.shape(Bands))), cmap='Greys')
+im = ax.pcolormesh(X, Y, Bands, vmax = 5, cmap='Greys')
 ax.set_title("Band structure")
 fig.colorbar(im)
 plt.show()
 
-# %%
-plt.plot(val)
-plt.show()
 # %%

@@ -20,12 +20,7 @@ def kron(x,y):
     else:
         return 0
 
-#NOTE: 
-# Problem --> Numba says H is read only, but it isn't. How do we fix this?
-#Answer --> Numba can't modify global variables in "nopython" mode. So, change
-#code to accomodate that.
 
-# This is much faster at making the Hamiltonian
 @jit(nopython = True)
 def Hamiltonian():
     M = np.ones((8*L**3,8*L**3),dtype=np.complex128) #intializing the hamiltonian 
@@ -54,7 +49,7 @@ sH = sp.bsr_matrix(H)
 # %%
 #NOTE: this is the bottle neck now. Making the Hamiltonian is very quick
 #solving for spectrum and eigenfunctions
-val, vec = linalg.eig(H) #these are the nomralized eigenfucntions
+val, vec = linalg.eig(H) #these are the normalized eigenfucntions
 
 # %%
 sval, svec = scipy.sparse.linalg.eigs(sH)
@@ -233,7 +228,7 @@ plt.show()
 #plt.scatter(eta,Phi,s=1)
 #plt.show()
 
-# %% inverse participation ratio - measures localization - keep for 3d
+# %% inverse participation ratio - measures localization
 n = 10
 eigf = vec[:,n]
 ipr = np.sum(np.square(np.square(eigf))) 

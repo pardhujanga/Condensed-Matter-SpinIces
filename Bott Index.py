@@ -29,12 +29,6 @@ def kron(x,y):
     else:
         return 0
 
-
-#NOTE: 
-# Problem --> Numba says H is read only, but it isn't. How do we fix this?
-#Answer --> Numba can't modify global variables in "nopython" mode. So, change
-#code to accomodate that.
-
 filling = np.zeros((L-1)**2, dtype=np.int64)
 k = int(np.random.randint(0,(L-1)**2)/2)
 

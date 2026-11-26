@@ -187,3 +187,69 @@ im = ax.imshow(Zp, cmap='plasma')
 ax.set_title("phase of eigenfunction on the lattice")
 fig.colorbar(im)
 plt.show()
+
+# NOTE The code below this is under developed/wrong. I have kept it for archiving. From the magnetic monopole lattice program
+
+# %% lattice intialisation
+# gamma to X
+g = np.meshgrid(np.linspace(0,L-1,L,dtype=np.float64), np.linspace(0,L-1,L,dtype=np.float64))
+r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1)
+
+
+# %% ORDERED BANDS!!!
+ordered_val = np.sort_complex(val)
+energy_dict = []
+for i in ordered_val:
+    energy_dict.append(list(val).index(i))
+energy_dict = np.array(energy_dict)
+
+l = L
+xlength = np.array(range(L))
+point_X = np.array([1,0],np.float64)
+point_Y = np.array([0,1],np.float64)
+eta = 2*np.pi*np.array(range(0,l,1))/(l)
+
+@jit(nopython=True)
+def ft(m):
+    eigfunc = vec[:,m]
+    phi = []
+    for e in xlength:
+        phi_e = 0
+        for p in index:
+            phi_e += np.exp(-1j*eta[e]*np.dot(point_X,r[p]))*eigfunc[p]
+        phi.append(np.square(np.abs(phi_e)))
+
+    return phi
+
+@jit(nopython = True)
+def bands():
+    band = []
+    n=0
+    while n < L**2: 
+        p=0          
+        k = np.array(ft(energy_dict[n]))
+        for l in index:
+            if l!=n and np.abs(ordered_val[n+p]-ordered_val[l])<5*2*10**-3:
+                k = k+np.array(ft(energy_dict[l]))
+                p+=1
+        n += 1+p
+        band.append(list(k))
+    return band
+
+bds = bands()
+
+# %% plotting
+X, Y = np.meshgrid(np.linspace(0,l-1,l,dtype=int), ordered_val)
+
+# plot
+fig, ax = plt.subplots()
+#import matplotlib.colors as colour
+
+im = ax.pcolormesh(X, Y, np.log(bds+np.ones(np.shape(bds))), cmap='plasma')
+ax.set_title("Band structure")
+fig.colorbar(im)
+plt.show()
+
+# %%
+plt.plot(val)
+plt.show()
