@@ -4,6 +4,7 @@ import numpy as np
 import scipy.sparse as sp # Tried to use sparse matrices, but was not suitable (added comment in 2026)
 from scipy import linalg
 from matplotlib import pyplot as plt
+import time
 
 L = 60 # Size of the lattice
 # Modified in 2026 for clarity
@@ -110,13 +111,16 @@ ax.set_title("phase of eigenfunction on the lattice")
 fig.colorbar(im_phase)
 plt.show()
 
-# %% BANDSTRUCTURE!!!!
-sorted_eigenvalues = np.sort(eigenvalues)
+
+# %% BANDSTRUCTURE!!! (added in 2026)
+
+# making a correspondence between the sorted energy eigenvalues and the eigenfunctions in the order they are produced in
 energy_dict = []
 for i in sorted_eigenvalues:
     energy_dict.append(list(eigenvalues).index(i))
 energy_dict = np.array(energy_dict)
 
+# These are just for reference, they are not used in the code
 point_X = np.array([1,0],np.float64) # Point on the BZ boundary directly along the k_x direction in the reciprocal lattice 
 point_Gamma = np.array([0,0],np.float64) # Origin in the reciprocal lattice
 point_M = np.array([1,1],np.float64) # Corner of the square BZ
@@ -127,9 +131,8 @@ r = np.append(g[0].reshape(-1,1),g[1].reshape(-1,1),axis=1) #this is the lattice
 g_k = np.meshgrid(np.linspace(-1,1,L,endpoint=False,dtype = np.float64), np.linspace(-1,1,L,endpoint=False,dtype = np.float64))
 k_space = np.pi*np.append(g_k[0].reshape(-1,1),g_k[1].reshape(-1,1),axis=1) #this is the reciprocal lattice, kinda
 
-# %%
-import time
-
+# Precalculating the Fourier exponential factors as they are the same for all wavefunctions
+# This gives a 10x performance increase
 @jit(nopython=True)
 def factors():
     factors = np.empty(shape=(L**4,), dtype=np.complex128)
@@ -142,66 +145,68 @@ def factors():
 Factors = factors()
 
 @jit(nopython=True)
-def ft(m):
-    eigfunc = eigenvectors[:,m]
+def Fourier_Transform(m):
+    eigfunc = eigenvectors[:,m] # Loading the chosen wavefunction
     i = 0
-    phi = np.empty(shape=(L**2,), dtype=np.int64)
+    phi = np.empty(shape=(L**2,), dtype=np.int64) # initialising the fourier transformed wavefunction
     for k in index:
         phi_k = 0
         for p in index:
-            phi_k += Factors[k*(L**2) + p] * eigfunc[p] # would having the exponential part be preccmputed be faster? that is the same for every single ft
+            phi_k += Factors[k*(L**2) + p] * eigfunc[p]  # I am saving the absolute value squared of each term of the fourier transform. This is because we need how big each "term" is.
         phi[i] = np.square(np.abs(phi_k))
         i += 1
 
     return np.reshape(phi, (L,L))
 
+# Just a primitive test to see how quickly each iteration of the fourier transform takes
 time_start = time.time()
-FT_amp = ft(energy_dict[0])
+FT_amp = Fourier_Transform(energy_dict[0])
 time_end = time.time()
 print(f"Took {time_end - time_start} seconds")
 
 time_start = time.time()
-FT_amp = ft(energy_dict[1])
+FT_amp = Fourier_Transform(energy_dict[1])
 time_end = time.time()
 print(f"Took {time_end - time_start} seconds for the second time")
 
 time_start = time.time()
-FT_amp = ft(energy_dict[2])
+FT_amp = Fourier_Transform(energy_dict[2])
 time_end = time.time()
 print(f"Took {time_end - time_start} seconds for the third time")
 
-
-# %%
-Origin = int(L/2)
+Origin = int(L/2) # The location of the origin of the reciprocal lattice is at this index for both x and y
 
 @jit(nopython = True)
-def bands():
-    band = np.empty(shape = (3*L**2, int(L/2)), dtype=np.int64)
+def bandstructure():
+    band = np.empty(shape = (3*L**2, int(L/2)), dtype=np.int64) # initialising the bandstructure
     for n in index:
-        Fourier = ft(energy_dict[n])
-        band[3*n] = Fourier[Origin: ,  Origin] #This is the section we want for Gamma to X 
-        band[3*n +1] = Fourier[L-1,  Origin:] #This is the section we want for X to M
-        band[3*n + 2] = np.array([Fourier[x,x] for x in np.arange(L-1,Origin-1,-1)]) #This is the section we want for M to Gamma
+        Fourier = Fourier_Transform(energy_dict[n]) # Written to limit the number of calls to Fourier_Transform
+        band[3*n] = Fourier[Origin: ,  Origin] # Gamma to X 
+        band[3*n +1] = Fourier[L-1,  Origin:] # X to M
+        band[3*n + 2] = np.array([Fourier[x,x] for x in np.arange(L-1,Origin-1,-1)]) # M to Gamma
     return band
 
-bds = bands()
+bds = bandstructure()
 
 # %% plotting
-a = int(3*L/2)
-X, Y = np.meshgrid(np.linspace(0, a-1, a,dtype=int), sorted_eigenvalues)
-Z = np.reshape(bds,(L**2, a)) # needs changing to fit the size of bds properly
-Bands = Z
+s = int(3*L/2) # just a convenient constant
+X, Y = np.meshgrid(np.linspace(0, s-1, s,dtype=int), sorted_eigenvalues)
+# Y has to be the sorted energy values otherwise, it plots everything "linearly". 
+# The energy values for each wavefunction are not uniform and that is important.
+Bands = np.reshape(bds,(L**2, s)) # needs changing to fit the size of bds properly
+
 
 # plot
 fig, ax = plt.subplots()
-plt.rcParams['figure.dpi'] = 600
+plt.rcParams['figure.dpi'] = 600 # change these based on the lattice resolution
 plt.rcParams['savefig.dpi'] = 600
 
 plt.ylabel("Energy")
 plt.xlabel("k")
 plt.vlines([Origin-1, L-1], sorted_eigenvalues[0], sorted_eigenvalues[L**2-1],"k")
-plt.xticks([0,Origin-1,L-1,a-1], ['\N{GREEK CAPITAL LETTER GAMMA}','X','M','\N{GREEK CAPITAL LETTER GAMMA}'])
+plt.xticks([0,Origin-1,L-1,s-1], ['\N{GREEK CAPITAL LETTER GAMMA}','X','M','\N{GREEK CAPITAL LETTER GAMMA}'])
 im = ax.pcolormesh(X, Y, Bands, vmax = 10, cmap='Greys')
+# Limiting the vmax allows us to see the details better. Can log Bands instead to be a bit more rigorous
 ax.set_title("Band structure")
 fig.colorbar(im)
 plt.show()
